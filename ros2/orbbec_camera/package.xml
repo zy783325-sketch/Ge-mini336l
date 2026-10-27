@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>orbbec_camera</name>
+  <version>0.1.0</version>
+  <description>ROS 2 image publisher for Orbbec cameras using OrbbecSDK.</description>
+  <maintainer email="maintainer@example.com">Orbbec Camera Maintainer</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>sensor_msgs_py</depend>
+  <depend>geometry_msgs</depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
