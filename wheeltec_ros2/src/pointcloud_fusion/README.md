@@ -1,6 +1,6 @@
 # 双雷达点云融合
 
-本包订阅 Wheeltec 双雷达驱动发布的前、后雷达点云，将两路点云分别通过 TF 变换到同一个目标坐标系，再合并为一条 `sensor_msgs/msg/PointCloud2`。
+本包订阅 Wheeltec 双雷达驱动发布的前、后雷达点云，将两路点云分别通过 TF 变换到同一个目标坐标系，再合并为一条 `sensor_msgs/msg/PointCloud2`。坐标变换只修改点的 x/y/z 字段，其余点字段会保留。
 
 默认输入：
 

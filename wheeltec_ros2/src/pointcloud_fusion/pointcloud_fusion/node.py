@@ -1,10 +1,13 @@
+import copy
+import math
+import struct
+
 from message_filters import ApproximateTimeSynchronizer, Subscriber
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointCloud2, PointField
 from tf2_ros import Buffer, TransformException, TransformListener
-from tf2_sensor_msgs.tf2_sensor_msgs import do_transform_cloud
 
 
 class PointCloudFusion(Node):
@@ -70,10 +73,13 @@ class PointCloudFusion(Node):
                 rclpy.time.Time.from_msg(rear.header.stamp),
                 timeout=timeout,
             )
-            front_transformed = do_transform_cloud(front, front_tf)
-            rear_transformed = do_transform_cloud(rear, rear_tf)
+            front_transformed = self.transform_cloud(front, front_tf)
+            rear_transformed = self.transform_cloud(rear, rear_tf)
         except TransformException as exc:
             self.get_logger().warning(f'Cannot transform input clouds: {exc}')
+            return
+        except (ValueError, struct.error) as exc:
+            self.get_logger().error(f'Cannot transform input cloud: {exc}')
             return
 
         if (
@@ -97,6 +103,57 @@ class PointCloudFusion(Node):
         merged.is_dense = front_transformed.is_dense and rear_transformed.is_dense
         merged.data = front_transformed.data + rear_transformed.data
         self.publisher.publish(merged)
+
+    @staticmethod
+    def transform_cloud(cloud, transform):
+        fields = {field.name: field for field in cloud.fields}
+        if not all(name in fields for name in ('x', 'y', 'z')):
+            raise ValueError('PointCloud2 must contain x, y and z fields')
+
+        formats = {PointCloudFusion.float_format(fields[name]) for name in 'xyz'}
+        if len(formats) != 1:
+            raise ValueError('x, y and z fields must use the same float type')
+        value_format = formats.pop()
+        endian = '>' if cloud.is_bigendian else '<'
+        point_format = endian + value_format
+        offsets = [fields[name].offset for name in 'xyz']
+
+        rotation = transform.transform.rotation
+        translation = transform.transform.translation
+        qx, qy, qz, qw = rotation.x, rotation.y, rotation.z, rotation.w
+        tx, ty, tz = translation.x, translation.y, translation.z
+
+        result = copy.copy(cloud)
+        result.data = bytearray(cloud.data)
+        result.header.frame_id = transform.header.frame_id
+
+        for row in range(cloud.height):
+            row_offset = row * cloud.row_step
+            for column in range(cloud.width):
+                point_offset = row_offset + column * cloud.point_step
+                x, y, z = (
+                    struct.unpack_from(point_format, result.data, point_offset + offset)[0]
+                    for offset in offsets
+                )
+                ix = 2.0 * (qy * z - qz * y)
+                iy = 2.0 * (qz * x - qx * z)
+                iz = 2.0 * (qx * y - qy * x)
+                ox = x + qw * ix + qy * iz - qz * iy + tx
+                oy = y + qw * iy + qz * ix - qx * iz + ty
+                oz = z + qw * iz + qx * iy - qy * ix + tz
+                for offset, value in zip(offsets, (ox, oy, oz)):
+                    struct.pack_into(point_format, result.data, point_offset + offset, value)
+
+        result.data = bytes(result.data)
+        return result
+
+    @staticmethod
+    def float_format(field):
+        if field.datatype == PointField.FLOAT32:
+            return 'f'
+        if field.datatype == PointField.FLOAT64:
+            return 'd'
+        raise ValueError(f'{field.name} field must be FLOAT32 or FLOAT64')
 
 
 def main(args=None):
