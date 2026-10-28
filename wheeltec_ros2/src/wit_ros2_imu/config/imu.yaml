@@ -1,0 +1,8 @@
+wit_ros2_imu:
+  ros__parameters:
+    port: /dev/imu_usb
+    baudrate: 921600
+    protocol: TTL_STD
+    modbusID: 80
+    output_rate_hz: 500
+    configure_output_rate: true
